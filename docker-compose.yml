@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # 1. Elasticsearch: The database that stores and indexes all our logs
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    container_name: siem_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    networks:
+      - siem_network
+
+  # 2. Logstash: The pipeline that reads our python logs, filters them, and sends them to Elasticsearch
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.10.2
+    container_name: siem_logstash
+    volumes:
+      # We will create this config file next
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      # This is the folder where our Python script will drop the fake logs
+      - ./logs:/var/log/siem_lab
+    environment:
+      - xpack.monitoring.enabled=false
+    depends_on:
+      - elasticsearch
+    networks:
+      - siem_network
+
+  # 3. Kibana: The web dashboard where we will build our security alerts and charts
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.10.2
+    container_name: siem_kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - siem_network
+
+networks:
+  siem_network:
+    driver: bridge
